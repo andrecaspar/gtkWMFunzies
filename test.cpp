@@ -50,15 +50,15 @@ int main(int argc, char *argv[]) {
 
   root = DefaultRootWindow(dpy);
 
+  Cursor cursor = XCreateFontCursor(dpy, XC_left_ptr);
+  XDefineCursor(dpy, root, cursor);
+
   XGrabKey(dpy, XKeysymToKeycode(dpy, XStringToKeysym("F1")), Mod1Mask, root,
            True, GrabModeAsync, GrabModeAsync);
   XGrabButton(dpy, 1, Mod1Mask, root, True, ButtonPressMask, GrabModeAsync,
               GrabModeAsync, None, None);
   XGrabButton(dpy, 3, Mod1Mask, root, True, ButtonPressMask, GrabModeAsync,
               GrabModeAsync, None, None);
-
-  Cursor cursor = XCreateFontCursor(dpy, XC_left_ptr);
-  XDefineCursor(dpy, root, cursor);
 
   for (;;) {
     auto application = Gtk::Application::create("test");
@@ -75,7 +75,6 @@ int main(int argc, char *argv[]) {
     } else if (ev.type == MotionNotify) {
       int xdiff, ydiff;
       while (XCheckTypedEvent(dpy, MotionNotify, &ev))
-        ;
       xdiff = ev.xbutton.x_root - start.x_root;
       ydiff = ev.xbutton.y_root - start.y_root;
       XMoveResizeWindow(dpy, ev.xmotion.window,
