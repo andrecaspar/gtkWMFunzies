@@ -1,10 +1,11 @@
 #include <gtkmm.h>
 #include <X11/Xlib.h>
+#include <X11/cursorfont.h>
 #include <iostream>
 
 class WindowMain : public Gtk::Window {
 public:
-  void On_button_clicked() { std::cout << "Hello World" << std::endl; }
+  void On_button_clicked() { std::cout << "test" << std::endl; }
 
   void css() {
     GtkCssProvider *provider;
@@ -38,14 +39,13 @@ private:
 };
 
 int main(int argc, char *argv[]) {
-
   Display *dpy;
   Window root;
   XWindowAttributes attr;
   XButtonEvent start;
   XEvent ev;
 
-  if (!(dpy = XOpenDisplay(0x0)))
+  if (!(dpy = XOpenDisplay(0)))
     return 1;
 
   root = DefaultRootWindow(dpy);
@@ -56,6 +56,9 @@ int main(int argc, char *argv[]) {
               GrabModeAsync, None, None);
   XGrabButton(dpy, 3, Mod1Mask, root, True, ButtonPressMask, GrabModeAsync,
               GrabModeAsync, None, None);
+
+  Cursor cursor = XCreateFontCursor(dpy, XC_left_ptr);
+  XDefineCursor(dpy, root, cursor);
 
   for (;;) {
     auto application = Gtk::Application::create("test");
