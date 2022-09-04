@@ -173,8 +173,8 @@ void gtkThread(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
   std::thread threadTest(gtkThread, argc, argv);
   std::thread threadTest2(xThread, argc, argv);
-  threadTest2.join();
   threadTest.join();
+  threadTest2.join();
 
   return 0;
 }
