@@ -1,12 +1,12 @@
-@keyframes color {
-  0%   { background: #33CCCC; }
-  20%  { background: #33CC36; }
-  40%  { background: #B8CC33; }
-  60%  { background: #FCCA00; }
-  80%  { background: #33CC36; }
-  100% { background: #33CCCC; }
-}
-
-* {
-  animation: color 9s infinite linear;
+button {
+  color: #fff;
+  text-shadow:
+    0 0 7px #fff,
+    0 0 10px #fff,
+    0 0 21px #fff,
+    0 0 42px #0fa,
+    0 0 82px #0fa,
+    0 0 92px #0fa,
+    0 0 102px #0fa,
+    0 0 151px #0fa;
 }
