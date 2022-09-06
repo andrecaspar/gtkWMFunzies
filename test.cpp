@@ -11,6 +11,51 @@
 
 GdkDisplay *gd;
 Display *d;
+XButtonEvent buttonClick;
+Window windowClick;
+
+int x11_fd;
+fd_set in_fds;
+
+struct timeval tv;
+XEvent ev;
+
+int tempMotionX = 0, tempMotionY = 0;
+
+void HandleMapRequest(XEvent *event) {
+  Window mapWindow = event->xmaprequest.window;
+  XMapWindow(d, mapWindow);
+  XSelectInput(d, mapWindow,
+               ExposureMask | StructureNotifyMask | EnterWindowMask |
+                   LeaveWindowMask);
+  XGrabButton(d, AnyButton, Mod1Mask, mapWindow, True, PointerMotionMask,
+              GrabModeAsync, GrabModeAsync, 0, 0);
+}
+
+void HandleMotionNotify(XEvent *event) {
+  int xd = event->xmotion.x - buttonClick.x;
+  int yd = event->xmotion.y - buttonClick.y;
+
+  XWindowAttributes windowAttrib;
+  XGetWindowAttributes(d, windowClick, &windowAttrib);
+  XMoveResizeWindow(
+      d, windowClick, windowAttrib.x + (buttonClick.button == 1 ? xd : 0),
+      windowAttrib.y + (buttonClick.button == 1 ? yd : 0),
+      MAX(windowAttrib.width +
+              (buttonClick.button == 3 ? event->xmotion.x - tempMotionX : 0),
+          30),
+      MAX(windowAttrib.height +
+              (buttonClick.button == 3 ? event->xmotion.y - tempMotionY : 0),
+          30));
+
+  tempMotionX = event->xmotion.x;
+  tempMotionY = event->xmotion.y;
+}
+
+void HandleButtonPress(XEvent *event) {
+  windowClick = event->xbutton.window;
+  buttonClick = event->xbutton;
+}
 
 void threadGtk() {
   GtkApplication *app;
@@ -38,6 +83,38 @@ void threadGtk() {
   }
 }
 
+void threadTest() {
+    //Window win;
+    //win = XCreateSimpleWindow(d, RootWindow(d, 0), 1, 1, 256, 256, \
+        //0, BlackPixel (d, 0), BlackPixel(d, 0));
+
+    //XSelectInput(d, win, 
+        //ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask |
+        //ButtonPressMask | ButtonReleaseMask  | StructureNotifyMask 
+        //);
+
+    //XMapWindow(d, win);
+    //XFlush(d);
+
+    // This returns the FD of the X11 display (or something like that)
+    x11_fd = ConnectionNumber(d);
+    while(1) {
+        FD_ZERO(&in_fds);
+        FD_SET(x11_fd, &in_fds);
+
+        tv.tv_usec = 0;
+        tv.tv_sec = 1;
+
+        int num_ready_fds = select(x11_fd + 1, &in_fds, NULL, NULL, &tv);
+        if (num_ready_fds > 0)
+            printf("Event Received!\n");
+        else if (num_ready_fds == 0)
+            printf("Timer Fired!\n");
+        else
+            printf("An error occured!\n");
+    }
+}
+
 void threadX() {
   int screen = DefaultScreen(d);
   Window root = DefaultRootWindow(d);
@@ -47,6 +124,7 @@ void threadX() {
 
   Window w = XCreateSimpleWindow(d, RootWindow(d, screen), 200, 10, 100, 100, 1,
                                  BlackPixel(d, screen), WhitePixel(d, screen));
+  XSelectInput(d, w, ExposureMask | KeyPressMask);
   XMapWindow(d, w);
 
   Cursor cursor = XCreateFontCursor(d, XC_left_ptr);
@@ -54,13 +132,8 @@ void threadX() {
   wa.cursor = cursor;
   XChangeWindowAttributes(d, root, CWCursor, &wa);
 
-  std::thread _threadGtk(threadGtk);
-  _threadGtk.join();
-
-  while (true) {
-    XEvent event;
-    XNextEvent(d, &event);
-  }
+  std::thread _threadTest(threadTest);
+  _threadTest.join();
 }
 
 int main(int argc, char **argv) {
@@ -69,5 +142,6 @@ int main(int argc, char **argv) {
   gd = gdk_display_get_default();
   d = GDK_DISPLAY_XDISPLAY(gd);
 
+  std::thread _threadGtk(threadGtk);
   threadX();
 }
