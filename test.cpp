@@ -24,12 +24,12 @@ int tempMotionX = 0, tempMotionY = 0;
 
 void HandleMapRequest(XEvent *event) {
   Window mapWindow = event->xmaprequest.window;
-  XMapWindow(d, mapWindow);
   XSelectInput(d, mapWindow,
                ExposureMask | StructureNotifyMask | EnterWindowMask |
                    LeaveWindowMask);
-  XGrabButton(d, AnyButton, Mod1Mask, mapWindow, True, PointerMotionMask,
+  XGrabButton(d, AnyButton, AnyModifier, mapWindow, True, PointerMotionMask,
               GrabModeAsync, GrabModeAsync, 0, 0);
+  XMapWindow(d, mapWindow);
 }
 
 void HandleMotionNotify(XEvent *event) {
@@ -38,23 +38,36 @@ void HandleMotionNotify(XEvent *event) {
 
   XWindowAttributes windowAttrib;
   XGetWindowAttributes(d, windowClick, &windowAttrib);
-  XMoveResizeWindow(
-      d, windowClick, windowAttrib.x + (buttonClick.button == 1 ? xd : 0),
-      windowAttrib.y + (buttonClick.button == 1 ? yd : 0),
-      MAX(windowAttrib.width +
-              (buttonClick.button == 3 ? event->xmotion.x - tempMotionX : 0),
-          30),
-      MAX(windowAttrib.height +
-              (buttonClick.button == 3 ? event->xmotion.y - tempMotionY : 0),
-          30));
+  XMoveResizeWindow(d, windowClick, 100, 100, 100, 100);
 
   tempMotionX = event->xmotion.x;
   tempMotionY = event->xmotion.y;
 }
 
+void HandleCreateNotify(XEvent *event) {
+  Window createdWindow = event->xcreatewindow.window;
+  XSelectInput(d, createdWindow,
+               ExposureMask | StructureNotifyMask | EnterWindowMask |
+                   LeaveWindowMask);
+  XGrabButton(d, AnyButton, AnyModifier, createdWindow, True, PointerMotionMask,
+              GrabModeAsync, GrabModeAsync, 0, 0);
+  XSync(d, 0);
+}
+
 void HandleButtonPress(XEvent *event) {
   windowClick = event->xbutton.window;
   buttonClick = event->xbutton;
+}
+
+void HandleExpose(XEvent *event) {
+  Window exposeWindow = event->xexpose.window;
+  windowClick = exposeWindow;
+  XSelectInput(d, exposeWindow,
+               ExposureMask | StructureNotifyMask | EnterWindowMask |
+                   LeaveWindowMask);
+  XGrabButton(d, AnyButton, AnyModifier, exposeWindow, True, PointerMotionMask,
+              GrabModeAsync, GrabModeAsync, 0, 0);
+  XSync(d, 0);
 }
 
 void threadGtk() {
@@ -63,7 +76,7 @@ void threadGtk() {
   GtkWidget *window = gtk_application_window_new(app);
 
   GtkWidget *button = gtk_button_new_with_label("Button");
-  gtk_window_set_child(GTK_WINDOW(window), button);
+  //gtk_window_set_child(GTK_WINDOW(window), button);
 
   gtk_window_set_title(GTK_WINDOW(window), "Window");
   gtk_window_set_default_size(GTK_WINDOW(window), 200, 200);
@@ -84,38 +97,43 @@ void threadGtk() {
 }
 
 void threadTest() {
-    //Window win;
-    //win = XCreateSimpleWindow(d, RootWindow(d, 0), 1, 1, 256, 256, \
-        //0, BlackPixel (d, 0), BlackPixel(d, 0));
+  XEvent event;
+  x11_fd = ConnectionNumber(d);
+  while (1) {
+    FD_ZERO(&in_fds);
+    FD_SET(x11_fd, &in_fds);
 
-    //XSelectInput(d, win, 
-        //ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask |
-        //ButtonPressMask | ButtonReleaseMask  | StructureNotifyMask 
-        //);
+    tv.tv_usec = 0;
+    tv.tv_sec = 1;
 
-    //XMapWindow(d, win);
-    //XFlush(d);
-
-    // This returns the FD of the X11 display (or something like that)
-    x11_fd = ConnectionNumber(d);
-    while(1) {
-        FD_ZERO(&in_fds);
-        FD_SET(x11_fd, &in_fds);
-
-        tv.tv_usec = 0;
-        tv.tv_sec = 1;
-
-        int num_ready_fds = select(x11_fd + 1, &in_fds, NULL, NULL, &tv);
-        if (num_ready_fds > 0)
-            printf("Event Received!\n");
-        else if (num_ready_fds == 0)
-            printf("Timer Fired!\n");
-        else
-            printf("An error occured!\n");
+    int num_ready_fds = select(x11_fd + 1, &in_fds, NULL, NULL, &tv);
+    if (num_ready_fds > 0) {
+      XPeekEvent(d, &event);
+      printf("\n%i", event.type);
+      switch (event.type) {
+      case (MapRequest):
+        HandleMapRequest(&event);
+        break;
+      case (ButtonPress):
+        HandleButtonPress(&event);
+        break;
+      case (MotionNotify):
+        HandleMotionNotify(&event);
+        break;
+      case (Expose):
+        HandleExpose(&event);
+        break;
+      case (CreateNotify):
+        HandleCreateNotify(&event);
+        break;
+      default:
+        break;
+      }
     }
+  }
 }
 
-void threadX() {
+void X() {
   int screen = DefaultScreen(d);
   Window root = DefaultRootWindow(d);
   XSelectInput(d, root,
@@ -124,6 +142,8 @@ void threadX() {
 
   Window w = XCreateSimpleWindow(d, RootWindow(d, screen), 200, 10, 100, 100, 1,
                                  BlackPixel(d, screen), WhitePixel(d, screen));
+  XGrabButton(d, AnyButton, AnyModifier, w, True, PointerMotionMask,
+              GrabModeAsync, GrabModeAsync, 0, 0);
   XSelectInput(d, w, ExposureMask | KeyPressMask);
   XMapWindow(d, w);
 
@@ -132,6 +152,7 @@ void threadX() {
   wa.cursor = cursor;
   XChangeWindowAttributes(d, root, CWCursor, &wa);
 
+  std::thread _threadGtk(threadGtk);
   std::thread _threadTest(threadTest);
   _threadTest.join();
 }
@@ -142,6 +163,5 @@ int main(int argc, char **argv) {
   gd = gdk_display_get_default();
   d = GDK_DISPLAY_XDISPLAY(gd);
 
-  std::thread _threadGtk(threadGtk);
-  threadX();
+  X();
 }
