@@ -75,8 +75,15 @@ void threadGtk() {
   app = gtk_application_new("org.gtk.example", G_APPLICATION_FLAGS_NONE);
   GtkWidget *window = gtk_application_window_new(app);
 
-  GtkWidget *button = gtk_button_new_with_label("Button");
-  //gtk_window_set_child(GTK_WINDOW(window), button);
+  GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(box, GTK_ALIGN_CENTER);
+
+  gtk_window_set_child(GTK_WINDOW(window), box);
+
+  GtkWidget *button = gtk_button_new_with_label("Hello World");
+
+  gtk_box_append(GTK_BOX(box), button);
 
   gtk_window_set_title(GTK_WINDOW(window), "Window");
   gtk_window_set_default_size(GTK_WINDOW(window), 200, 200);
@@ -109,7 +116,6 @@ void threadTest() {
     int num_ready_fds = select(x11_fd + 1, &in_fds, NULL, NULL, &tv);
     if (num_ready_fds > 0) {
       XPeekEvent(d, &event);
-      printf("\n%i", event.type);
       switch (event.type) {
       case (MapRequest):
         HandleMapRequest(&event);
@@ -124,6 +130,7 @@ void threadTest() {
         HandleExpose(&event);
         break;
       case (CreateNotify):
+        printf("\n\n\ncreate");
         HandleCreateNotify(&event);
         break;
       default:
