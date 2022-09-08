@@ -82,6 +82,17 @@ void HandleExpose(XEvent *event) {
   XSync(d, 0);
 }
 
+void HandleSelectionNotify(XEvent *event) {
+  Window selectWindow = event->xselection.requestor;
+  windowClick = selectWindow;
+  XSelectInput(d, selectWindow,
+               ExposureMask | StructureNotifyMask | EnterWindowMask |
+                   LeaveWindowMask);
+  XGrabButton(d, AnyButton, AnyModifier, selectWindow, True, PointerMotionMask,
+              GrabModeAsync, GrabModeAsync, 0, 0);
+  XSync(d, 0);
+}
+
 void threadGtk() {
   sleep(5);
   GtkApplication *app;
@@ -142,6 +153,9 @@ void threadTest() {
         break;
       case (ButtonPress):
         HandleButtonPress(&event);
+        break;
+      case (SelectionNotify):
+        HandleSelectionNotify(&event);
         break;
       case (MotionNotify):
         HandleMotionNotify(&event);
