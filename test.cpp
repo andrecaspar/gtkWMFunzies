@@ -1,6 +1,7 @@
 #include <gtk/gtk.h>
 #include <gtkmm.h>
 #include <iostream>
+#include <pthread.h>
 #include <stdio.h>
 #include <thread>
 #include <unistd.h>
@@ -10,91 +11,105 @@
 #include <gdk/x11/gdkx.h>
 
 GdkDisplay *gd;
-Display *d;
+Display *dpy;
 XButtonEvent buttonClick;
 Window windowClick;
-
-int x11_fd;
-fd_set in_fds;
+int screen;
 
 struct timeval tv;
 XEvent ev;
 
 int tempMotionX = 0, tempMotionY = 0;
 
+void manage(Window w, XWindowAttributes *wa) {
+  XGrabButton(dpy, AnyButton, AnyModifier, w, True, PointerMotionMask,
+              GrabModeAsync, GrabModeAsync, 0, 0);
+  XSelectInput(dpy, w,
+               EnterWindowMask | KeyPressMask | FocusChangeMask |
+                   PropertyChangeMask | StructureNotifyMask);
+  XMapWindow(dpy, w);
+}
+
 void HandleMapRequest(XEvent *event) {
-  Window mapWindow = event->xmaprequest.window;
-  XSelectInput(d, mapWindow,
-               ExposureMask | StructureNotifyMask | EnterWindowMask |
-                   LeaveWindowMask);
-  XGrabButton(d, AnyButton, AnyModifier, mapWindow, True, PointerMotionMask,
-              GrabModeAsync, GrabModeAsync, 0, 0);
-  XMapWindow(d, mapWindow);
+  static XWindowAttributes wa;
+  XMapRequestEvent *ev = &event->xmaprequest;
+  manage(ev->window, &wa);
 }
 
-void HandleMotionNotify(XEvent *event) {
-  int xd = event->xmotion.x - buttonClick.x;
-  int yd = event->xmotion.y - buttonClick.y;
-
-  XWindowAttributes windowAttrib;
-  XGetWindowAttributes(d, windowClick, &windowAttrib);
-  XMoveResizeWindow(d, windowClick, xd, yd, windowAttrib.height,
-                    windowAttrib.width);
-
-  tempMotionX = event->xmotion.x;
-  tempMotionY = event->xmotion.y;
+static void client_resize_absolute(Window window, int w, int h) {
+  XResizeWindow(dpy, window, MAX(w, 10), MAX(h, 10));
 }
 
-void HandleCreateNotify(XEvent *event) {
-  Window createdWindow = event->xcreatewindow.window;
-  XSelectInput(d, createdWindow,
-               ExposureMask | StructureNotifyMask | EnterWindowMask |
-                   LeaveWindowMask);
-  XGrabButton(d, AnyButton, AnyModifier, createdWindow, True, PointerMotionMask,
-              GrabModeAsync, GrabModeAsync, 0, 0);
-  XSync(d, 0);
+static void client_move_absolute(Window window, int x, int y) {
+  XMoveWindow(dpy, window, x, y);
 }
 
-void HandleButtonPress(XEvent *event) {
-  windowClick = event->xbutton.window;
-  buttonClick = event->xbutton;
-}
+static void HandleButtonPress(XEvent *e) {
+  printf("\n\n\nPRESSSSSSSSSSSSEEEEEEEEEEEEEEEEEEEEEEEEEDD");
+  XButtonPressedEvent *bev = &e->xbutton;
+  XEvent ev;
+  int x, y, ocx, ocy, nx, ny, nw, nh, di, ocw, och;
+  unsigned int dui;
+  Window dummy;
+  Time current_time, last_motion;
 
-void HandleConfigureNotify(XEvent *event) {
-  Window configWindow = event->xconfigure.window;
-  windowClick =configWindow;
-  XSelectInput(d, configWindow,
-               ExposureMask | StructureNotifyMask | EnterWindowMask |
-                   LeaveWindowMask);
-  XGrabButton(d, AnyButton, AnyModifier, configWindow, True, PointerMotionMask,
-              GrabModeAsync, GrabModeAsync, 0, 0);
-  XSync(d, 0);
-}
+  XQueryPointer(dpy, RootWindow(dpy, screen), &dummy, &dummy, &x, &y, &di, &di,
+                &dui);
 
-void HandleExpose(XEvent *event) {
-  Window exposeWindow = event->xexpose.window;
-  windowClick = exposeWindow;
-  XSelectInput(d, exposeWindow,
-               ExposureMask | StructureNotifyMask | EnterWindowMask |
-                   LeaveWindowMask);
-  XGrabButton(d, AnyButton, AnyModifier, exposeWindow, True, PointerMotionMask,
-              GrabModeAsync, GrabModeAsync, 0, 0);
-  XSync(d, 0);
-}
+  XWindowAttributes windowAttribs;
+  XGetWindowAttributes(dpy, bev->window, &windowAttribs);
 
-void HandleSelectionNotify(XEvent *event) {
-  Window selectWindow = event->xselection.requestor;
-  windowClick = selectWindow;
-  XSelectInput(d, selectWindow,
-               ExposureMask | StructureNotifyMask | EnterWindowMask |
-                   LeaveWindowMask);
-  XGrabButton(d, AnyButton, AnyModifier, selectWindow, True, PointerMotionMask,
-              GrabModeAsync, GrabModeAsync, 0, 0);
-  XSync(d, 0);
+  ocx = windowAttribs.x;
+  ocy = windowAttribs.y;
+  ocw = windowAttribs.width;
+  och = windowAttribs.height;
+  last_motion = ev.xmotion.time;
+  Cursor move_cursor = XCreateFontCursor(dpy, XC_crosshair);
+  if (XGrabPointer(dpy, RootWindow(dpy, screen), False,
+                   PointerMotionMask | ButtonPressMask | ButtonReleaseMask,
+                   GrabModeAsync, GrabModeAsync, None, move_cursor,
+                   CurrentTime) != GrabSuccess)
+    return;
+  do {
+    XMaskEvent(dpy,
+               PointerMotionMask | ButtonPressMask | ButtonReleaseMask |
+                   ExposureMask | SubstructureRedirectMask,
+               &ev);
+    switch (ev.type) {
+    case ConfigureRequest:
+      // handle
+      break;
+    case Expose:
+      // handle
+      break;
+    case MapRequest:
+      HandleMapRequest(&ev);
+      break;
+    case MotionNotify:
+      current_time = ev.xmotion.time;
+      Time diff_time = current_time - last_motion;
+      if (diff_time < (Time)1) {
+        continue;
+      }
+      last_motion = current_time;
+      if (ev.xbutton.state == (unsigned)(Button1Mask) ||
+          ev.xbutton.state == Button1Mask) {
+        nx = ocx + (ev.xmotion.x - x);
+        ny = ocy + (ev.xmotion.y - y);
+        client_move_absolute(bev->window, nx, ny);
+      } else if (ev.xbutton.state == (unsigned)(Button1Mask)) {
+        nw = ev.xmotion.x - x;
+        nh = ev.xmotion.y - y;
+        client_resize_absolute(bev->window, ocw + nw, och + nh);
+      }
+      XFlush(dpy);
+      break;
+    }
+  } while (ev.type != ButtonRelease);
+  XUngrabPointer(dpy, CurrentTime);
 }
 
 void threadGtk() {
-  sleep(5);
   GtkApplication *app;
   app = gtk_application_new("org.gtk.example", G_APPLICATION_FLAGS_NONE);
 
@@ -132,81 +147,45 @@ void threadGtk() {
   }
 }
 
-void threadTest() {
-  XEvent event;
-  x11_fd = ConnectionNumber(d);
-  std::thread _threadGtk(threadGtk);
-  while (1) {
-    FD_ZERO(&in_fds);
-    FD_SET(x11_fd, &in_fds);
-
-    tv.tv_usec = 0;
-    tv.tv_sec = 1;
-
-    int num_ready_fds = select(x11_fd + 1, &in_fds, NULL, NULL, &tv);
-    if (num_ready_fds > 0) {
-      XPeekEvent(d, &event);
-      printf("\n\n\n%i", event.type);
-      switch (event.type) {
-      case (MapRequest):
-        HandleMapRequest(&event);
-        break;
-      case (ButtonPress):
-        HandleButtonPress(&event);
-        break;
-      case (SelectionNotify):
-        HandleSelectionNotify(&event);
-        break;
-      case (MotionNotify):
-        HandleMotionNotify(&event);
-        break;
-      case (Expose):
-        HandleExpose(&event);
-        break;
-      case (ConfigureNotify):
-        HandleConfigureNotify(&event);
-        break;
-      case (CreateNotify):
-        printf("\n\n\n\nCREATEEEEEEEEEEEEEEEEEEE\n\n\n\n\n");
-        HandleCreateNotify(&event);
-        break;
-      default:
-        break;
-      }
+void run(void) {
+  XEvent ev;
+  XSync(dpy, False);
+  while (true && !XNextEvent(dpy, &ev))
+    switch (ev.type) {
+    case MapRequest:
+      HandleMapRequest(&ev);
+      break;
+    case ButtonPress:
+      HandleButtonPress(&ev);
+      break;
+    default:
+      break;
     }
-  }
-  XSync(d, 0);
-}
-
-void X() {
-  int screen = DefaultScreen(d);
-  Window root = DefaultRootWindow(d);
-  XSelectInput(d, root,
-               PropertyChangeMask | SubstructureRedirectMask |
-                   SubstructureNotifyMask);
-
-  //Window w = XCreateSimpleWindow(d, RootWindow(d, screen), 200, 10, 100, 100, 1,
-                                 //BlackPixel(d, screen), WhitePixel(d, screen));
-  //XGrabButton(d, AnyButton, AnyModifier, w, True, PointerMotionMask,
-              //GrabModeAsync, GrabModeAsync, 0, 0);
-  //XSelectInput(d, w, ExposureMask | KeyPressMask);
-  //XMapWindow(d, w);
-
-  Cursor cursor = XCreateFontCursor(d, XC_left_ptr);
-  XSetWindowAttributes wa;
-  wa.cursor = cursor;
-  XChangeWindowAttributes(d, root, CWCursor, &wa);
-  XSync(d, 0);
-
-  std::thread _threadTest(threadTest);
-  _threadTest.join();
 }
 
 int main(int argc, char **argv) {
+  dpy = XOpenDisplay(NULL);
+  screen = DefaultScreen(dpy);
+
   gtk_init();
 
   gd = gdk_display_get_default();
-  d = GDK_DISPLAY_XDISPLAY(gd);
 
-  X();
+  std::thread _threadGtk(threadGtk);
+
+  Cursor cursor = XCreateFontCursor(dpy, XC_left_ptr);
+  XSetWindowAttributes wa;
+  wa.cursor = cursor;
+  XChangeWindowAttributes(dpy, RootWindow(dpy, screen), CWCursor, &wa);
+  XSync(dpy, 0);
+
+  Window w =
+      XCreateSimpleWindow(dpy, RootWindow(dpy, screen), 200, 10, 100, 100, 1,
+                          BlackPixel(dpy, screen), WhitePixel(dpy, screen));
+  XGrabButton(dpy, AnyButton, AnyModifier, w, True, PointerMotionMask,
+              GrabModeAsync, GrabModeAsync, 0, 0);
+  XSelectInput(dpy, w, ExposureMask | KeyPressMask);
+  XMapWindow(dpy, w);
+
+  run();
 }
