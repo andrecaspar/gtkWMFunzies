@@ -45,7 +45,6 @@ static void client_move_absolute(Window window, int x, int y) {
 }
 
 static void HandleButtonPress(XEvent *e) {
-  printf("\n\n\nPRESSSSSSSSSSSSEEEEEEEEEEEEEEEEEEEEEEEEEDD");
   XButtonPressedEvent *bev = &e->xbutton;
   XEvent ev;
   int x, y, ocx, ocy, nx, ny, nw, nh, di, ocw, och;
@@ -109,6 +108,20 @@ static void HandleButtonPress(XEvent *e) {
   XUngrabPointer(dpy, CurrentTime);
 }
 
+void HandleConfigureRequest(XEvent *e) {
+  XConfigureRequestEvent *ev = &e->xconfigurerequest;
+  XWindowChanges wc;
+  wc.x = ev->x;
+  wc.y = ev->y;
+  wc.width = ev->width;
+  wc.height = ev->height;
+  wc.border_width = ev->border_width;
+  wc.sibling = ev->above;
+  wc.stack_mode = ev->detail;
+  XConfigureWindow(dpy, ev->window, ev->value_mask, &wc);
+  XSync(dpy, False);
+}
+
 void threadGtk() {
   GtkApplication *app;
   app = gtk_application_new("org.gtk.example", G_APPLICATION_FLAGS_NONE);
@@ -158,26 +171,37 @@ void run(void) {
     case ButtonPress:
       HandleButtonPress(&ev);
       break;
+    case ConfigureRequest:
+      HandleConfigureRequest(&ev);
+      break;
     default:
       break;
     }
 }
 
+void setup(void) {
+  XSetWindowAttributes wa;
+  screen = DefaultScreen(dpy);
+  wa.cursor = XCreateFontCursor(dpy, XC_left_ptr);
+  wa.event_mask = SubstructureRedirectMask | SubstructureNotifyMask |
+                  ButtonPressMask | PointerMotionMask | EnterWindowMask |
+                  LeaveWindowMask | StructureNotifyMask | PropertyChangeMask;
+  XChangeWindowAttributes(dpy, RootWindow(dpy, screen), CWEventMask | CWCursor,
+                          &wa);
+  XSelectInput(dpy, RootWindow(dpy, screen), wa.event_mask);
+}
+
 int main(int argc, char **argv) {
   dpy = XOpenDisplay(NULL);
-  screen = DefaultScreen(dpy);
+  setup();
 
   gtk_init();
 
   gd = gdk_display_get_default();
 
-  std::thread _threadGtk(threadGtk);
-
-  Cursor cursor = XCreateFontCursor(dpy, XC_left_ptr);
-  XSetWindowAttributes wa;
-  wa.cursor = cursor;
-  XChangeWindowAttributes(dpy, RootWindow(dpy, screen), CWCursor, &wa);
-  XSync(dpy, 0);
+  // std::thread _threadGtk(threadGtk);
+  pthread_t thread_id;
+  pthread_create(&thread_id, NULL, (void *(*)(void *))threadGtk, NULL);
 
   Window w =
       XCreateSimpleWindow(dpy, RootWindow(dpy, screen), 200, 10, 100, 100, 1,
