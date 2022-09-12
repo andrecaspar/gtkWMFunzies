@@ -126,25 +126,10 @@ void threadGtk() {
   GtkApplication *app;
   app = gtk_application_new("org.gtk.example", G_APPLICATION_FLAGS_NONE);
 
-  GtkWidget *window;
-  GtkWidget *button;
-  GtkWidget *box;
+  GtkBuilder *builder = gtk_builder_new_from_file("test.glade");
 
-  window = gtk_application_window_new(app);
-  gtk_window_set_title(GTK_WINDOW(window), "Window");
-  gtk_window_set_default_size(GTK_WINDOW(window), 200, 200);
-
-  box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
-  gtk_widget_set_valign(box, GTK_ALIGN_CENTER);
-
-  gtk_window_set_child(GTK_WINDOW(window), box);
-
-  button = gtk_button_new_with_label("Hello World");
-
-  gtk_box_append(GTK_BOX(box), button);
-
-  gtk_widget_show(window);
+  GObject *window = gtk_builder_get_object(builder, "main_window");
+  gtk_widget_show(GTK_WIDGET(window));
 
   GtkCssProvider *provider;
   provider = gtk_css_provider_new();
@@ -199,9 +184,7 @@ int main(int argc, char **argv) {
 
   gd = gdk_display_get_default();
 
-  // std::thread _threadGtk(threadGtk);
-  pthread_t thread_id;
-  pthread_create(&thread_id, NULL, (void *(*)(void *))threadGtk, NULL);
+  std::thread _threadGtk(threadGtk);
 
   Window w =
       XCreateSimpleWindow(dpy, RootWindow(dpy, screen), 200, 10, 100, 100, 1,
