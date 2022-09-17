@@ -126,7 +126,7 @@ void threadGtk() {
   GtkApplication *app;
   app = gtk_application_new("org.gtk.example", G_APPLICATION_FLAGS_NONE);
 
-  GtkBuilder *builder = gtk_builder_new_from_file("test.glade");
+  GtkBuilder *builder = gtk_builder_new_from_file("test.xml");
 
   GObject *window = gtk_builder_get_object(builder, "main_window");
   gtk_widget_show(GTK_WIDGET(window));
